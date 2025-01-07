@@ -16,26 +16,26 @@ keywords = ["قیمت", "موجودی", "میلگرد", "خرید", "ورق", "�
 # Initialize Excel files
 messages_wb = Workbook()
 messages_ws = messages_wb.active
-messages_ws.append(["Keyword", "Message", "Sender ID", "Sender Name", "Phone Number", "Date Time", "Message Link"])
+messages_ws.append(["Keyword", "Message", "Sender ID", "Sender Name", "Telegram Username", "Phone Number", "Date Time", "Message Link"])
 
 phonebook_wb = Workbook()
 phonebook_ws = phonebook_wb.active
-phonebook_ws.append(["User ID", "Phone Number"])
+phonebook_ws.append(["User ID", "Telegram Username", "Phone Number"])
 
 # Setup logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def save_to_excel(keyword, message, sender_id, sender_name, phone_number, message_link):
+def save_to_excel(keyword, message, sender_id, sender_name, username, phone_number, message_link):
     """Saves relevant data to the messages Excel file"""
     date_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    messages_ws.append([keyword, message, sender_id, sender_name, phone_number, date_time, message_link])
+    messages_ws.append([keyword, message, sender_id, sender_name, username, phone_number, date_time, message_link])
     messages_wb.save("messages.xlsx")
 
-def save_phone_number(user_id, phone_number):
-    """Saves phone number to the phonebook Excel file"""
-    phonebook_ws.append([user_id, phone_number])
+def save_phone_number(user_id, username, phone_number):
+    """Saves phone number and username to the phonebook Excel file"""
+    phonebook_ws.append([user_id, username, phone_number])
     phonebook_wb.save("phonebook.xlsx")
 
 def check_duplicate_number(phone_number):
@@ -44,7 +44,7 @@ def check_duplicate_number(phone_number):
         phonebook_wb = load_workbook("phonebook.xlsx")
         phonebook_ws = phonebook_wb.active
         for row in phonebook_ws.iter_rows(min_row=2, values_only=True):
-            if row[1] == phone_number:
+            if row[2] == phone_number:
                 return True
     except FileNotFoundError:
         pass  # If phonebook doesn't exist yet, no problem
@@ -55,6 +55,7 @@ async def message_handler(update: Update, context):
     message = update.message.text
     sender_id = update.message.from_user.id
     sender_name = update.message.from_user.full_name
+    username = f"@{update.message.from_user.username}" if update.message.from_user.username else "N/A"
 
     # Look up the phone number in the phonebook
     phone_number = "N/A"
@@ -63,7 +64,7 @@ async def message_handler(update: Update, context):
         phonebook_ws = phonebook_wb.active
         for row in phonebook_ws.iter_rows(min_row=2, values_only=True):
             if row[0] == sender_id:
-                phone_number = row[1]
+                phone_number = row[2]
                 break
     except FileNotFoundError:
         pass  # If phonebook doesn't exist yet, no problem, phone_number remains "N/A"
@@ -78,17 +79,18 @@ async def message_handler(update: Update, context):
         # Create a link to the message in Telegram (using message URL format)
         message_link = f"https://t.me/{update.message.chat.username}/{update.message.message_id}"
         for keyword in matched_keywords:
-            save_to_excel(keyword, message, sender_id, sender_name, phone_number, message_link)
+            save_to_excel(keyword, message, sender_id, sender_name, username, phone_number, message_link)
         
         # Notify the manager about the keyword detection
         notification = (
-            f"🔔 **Keyword Alert**\n\n"
-            f"📌 **Keywords**: {', '.join(matched_keywords)}\n"
-            f"👤 **Sender Name**: {sender_name}\n"
-            f"🆔 **Sender ID**: {sender_id}\n"
-            f"📨 **Message**: {message}\n"
-            f"📞 **Phone Number**: {phone_number}\n"
-            f"🔗 **Message Link**: {message_link}"
+            f"🔔 **هشدار کلمه کلیدی**\n\n"
+            f"📌 **کلمات کلیدی**: {', '.join(matched_keywords)}\n"
+            f"👤 **نام فرستنده**: {sender_name}\n"
+            f"🆔 **آیدی**: {sender_id}\n"
+            f"🌐 **یوزرنیم**: {username}\n"
+            f"📨 **متن پیام**: {message}\n"
+            f"📞 **شماره موبایل**: {phone_number}\n"
+            f"🔗 **لینک پیام**: {message_link}"
         )
         await context.bot.send_message(chat_id=MANAGER_ID, text=notification, parse_mode="Markdown")
 
@@ -107,18 +109,18 @@ async def start(update: Update, context):
 
     # Buttons to share phone number and check if number is saved
     keyboard = [
-        [KeyboardButton("Share phone number", request_contact=True)]
+        [KeyboardButton("اشتراک گذاری شماره 📲", request_contact=True)]
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
     if not phone_number_exists:
         await update.message.reply_text(
-            "Hello! Please share your phone number to proceed.",
+            "سلام لطفا شماره خود را شیر کنید.",
             reply_markup=reply_markup
         )
     else:
         await update.message.reply_text(
-            "Your phone number is already saved.",
+            "شماره شما ذخیره شده است.",
             reply_markup=reply_markup
         )
 
@@ -126,15 +128,16 @@ async def contact_handler(update: Update, context):
     """Handles the phone number shared by the user"""
     user = update.message.from_user
     user_id = user.id
+    username = f"@{user.username}" if user.username else "N/A"
     phone_number = update.message.contact.phone_number
 
     # Check if the phone number is already in the phonebook
     if check_duplicate_number(phone_number):
-        await update.message.reply_text(f"Sorry, the number {phone_number} is already saved.")
+        await update.message.reply_text(f"شماره شما {phone_number} قبلا ذخیره شده است.")
     else:
-        # Save phone number to the phonebook
-        save_phone_number(user_id, phone_number)
-        await update.message.reply_text(f"Thank you! Your phone number ({phone_number}) has been saved.")
+        # Save phone number and username to the phonebook
+        save_phone_number(user_id, username, phone_number)
+        await update.message.reply_text(f"مرسی، شماره شما ({phone_number}) ذخیره شد.")
 
 def main():
     """Start the bot"""
