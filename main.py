@@ -5,7 +5,7 @@ from openpyxl import Workbook, load_workbook
 from datetime import datetime
 import requests
 # Define your token
-TOKEN = "7876541WxedE1iaH_dXg"
+TOKEN = "787iaH_dXg"
 
 # Define the manager's ID
 MANAGER_ID = 1113600227
