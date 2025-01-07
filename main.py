@@ -1,13 +1,14 @@
 import logging
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import Application, MessageHandler, filters, CommandHandler, CallbackQueryHandler
+from telegram.ext import Application, MessageHandler, filters, CommandHandler
 from openpyxl import Workbook, load_workbook
 from datetime import datetime
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-  # <- No need for this line
-
+import requests
 # Define your token
-TOKEN = "787654dE1iaH_dXg"
+TOKEN = "7876541WxedE1iaH_dXg"
+
+# Define the manager's ID
+MANAGER_ID = 1113600227
 
 # Define the keywords you are looking for
 keywords = ["قیمت", "موجودی", "میلگرد", "خرید", "ورق", "تیراهن"]
@@ -72,14 +73,24 @@ async def message_handler(update: Update, context):
         if keyword in message:
             matched_keywords.append(keyword)
 
-    # If any keywords match, save message to Excel and reply in the group
+    # If any keywords match, save message to Excel and notify the manager
     if matched_keywords:
         # Create a link to the message in Telegram (using message URL format)
         message_link = f"https://t.me/{update.message.chat.username}/{update.message.message_id}"
         for keyword in matched_keywords:
             save_to_excel(keyword, message, sender_id, sender_name, phone_number, message_link)
-        response = f"Keywords detected: {', '.join(matched_keywords)}"
-        await update.message.reply_text(response)
+        
+        # Notify the manager about the keyword detection
+        notification = (
+            f"🔔 **Keyword Alert**\n\n"
+            f"📌 **Keywords**: {', '.join(matched_keywords)}\n"
+            f"👤 **Sender Name**: {sender_name}\n"
+            f"🆔 **Sender ID**: {sender_id}\n"
+            f"📨 **Message**: {message}\n"
+            f"📞 **Phone Number**: {phone_number}\n"
+            f"🔗 **Message Link**: {message_link}"
+        )
+        await context.bot.send_message(chat_id=MANAGER_ID, text=notification, parse_mode="Markdown")
 
 async def start(update: Update, context):
     """Start command to send buttons"""
@@ -125,7 +136,6 @@ async def contact_handler(update: Update, context):
         save_phone_number(user_id, phone_number)
         await update.message.reply_text(f"Thank you! Your phone number ({phone_number}) has been saved.")
 
-
 def main():
     """Start the bot"""
     application = Application.builder().token(TOKEN).build()
@@ -138,7 +148,6 @@ def main():
 
     # Contact handler
     application.add_handler(MessageHandler(filters.CONTACT, contact_handler))
-
 
     # Start the bot
     application.run_polling()
