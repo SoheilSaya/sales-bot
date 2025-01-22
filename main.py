@@ -20,7 +20,7 @@ def extract_vendor(text):
             return vendor
     
     return "نامشخص"
-
+commodity_type_found=""
 # Helper function to extract commodity data
 def extract_commodity_data(text):
     results = []
@@ -72,7 +72,10 @@ def extract_commodity_data(text):
                     price_found = price_match.group(1) + "0"
                 elif i + 1 < len(lines):  # Check the next line for the price
                     next_line_price_match = re.search(r"\b(\d{5,})0\b", lines[i + 1])
-                    if next_line_price_match:
+                    for temp_commodity_type in reference_dict["commodity_types"]:
+                        if temp_commodity_type in line: 
+                            commodity_type_found=True
+                    if next_line_price_match and not commodity_type_found:
                         price_found = next_line_price_match.group(1) + "0"
                 
                 # Add the extracted data to results
@@ -93,17 +96,26 @@ def extract_commodity_data(text):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message.text
     extracted_data = extract_commodity_data(message)
-    
+        
     # Format the extracted data for response
-    formatted_data = "\n".join(
-        f"تاریخ: {item['date'] or 'نامشخص'}, فروشنده: {item['vendor']}, نوع: {item['commodity_type']}, نوع فولاد: {item['type'] or 'نامشخص'}, گرید: {item['grade'] or 'نامشخص'}, سایز: {item['size'] or 'نامشخص'}, قیمت: {item['price'] or 'نامشخص'}"
+    formatted_data = "\n\n".join(
+        f"🗓 **تاریخ:** {item['date'] or 'نامشخص'}\n"
+        f"🏷 **فروشنده:** {item['vendor'] or 'نامشخص'}\n"
+        f"📦 **نوع کالا:** {item['commodity_type']}\n"
+        f"🔧 **نوع فولاد:** {item['type'] or 'نامشخص'}\n"
+        f"⚙️ **گرید:** {item['grade'] or 'نامشخص'}\n"
+        f"📏 **سایز:** {item['size'] or 'نامشخص'}\n"
+        f"💵 **قیمت:** {item['price'] or 'نامشخص'}"
         for item in extracted_data
     )
-    
-    response = formatted_data if formatted_data else "هیچ اطلاعات مرتبطی یافت نشد."
-    
+        
+    # Add a stylish header
+    header = "🌟 **اطلاعات استخراج شده** 🌟\n" + ("—" * 25)
+    response = f"{header}\n\n{formatted_data}" if formatted_data else "❌ هیچ اطلاعات مرتبطی یافت نشد."
+        
     # Reply with the formatted data
-    await update.message.reply_text(response)
+    await update.message.reply_text(response, parse_mode="Markdown")
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("سلام! پیام خود را ارسال کنید تا اطلاعات مرتبط استخراج شود.")
