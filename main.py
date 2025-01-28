@@ -2,10 +2,48 @@ import json
 import re
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+import psycopg2
 
 # Load the updated dictionary
 with open("dictionary.json", "r", encoding="utf-8") as file:
     reference_dict = json.load(file)
+
+# Database connection
+def connect_to_db():
+    return psycopg2.connect(
+        dbname="metals",
+        user="postgres",
+        password="1111",  # Replace with your PostgreSQL password
+        host="localhost",
+        port="5432"
+    )
+
+# Save data to the database
+def save_to_db(data):
+    try:
+        conn = connect_to_db()
+        cur = conn.cursor()
+        for item in data:
+            cur.execute(
+                """
+                INSERT INTO extracted_data (date, vendor, commodity_type, type, grade, size, price)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    item['date'],
+                    item['vendor'],
+                    item['commodity_type'],
+                    item['type'],
+                    item['grade'],
+                    item['size'],
+                    item['price'],
+                )
+            )
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"Error saving to database: {e}")
 
 # Helper function to extract vendor
 def extract_vendor(text):
@@ -13,14 +51,16 @@ def extract_vendor(text):
     vendor_match = re.search(r"#(\S+)", text)
     if vendor_match:
         return vendor_match.group(1)
-    
+
     # Check for known vendor names
     for vendor in reference_dict["vendors"]:
         if vendor in text:
             return vendor
-    
+
     return "نامشخص"
-commodity_type_found=""
+
+commodity_type_found = ""
+
 # Helper function to extract commodity data
 def extract_commodity_data(text):
     results = []
@@ -72,7 +112,10 @@ def extract_commodity_data(text):
                     price_found = price_match.group(1) + "0"
                 elif i + 1 < len(lines):  # Check the next line for the price
                     next_line_price_match = re.search(r"\b(\d{5,})0\b", lines[i + 1])
-                    if next_line_price_match:
+                    for temp_commodity_type in reference_dict["commodity_types"]:
+                        if temp_commodity_type in line: 
+                            commodity_type_found=True
+                    if next_line_price_match and not commodity_type_found:
                         price_found = next_line_price_match.group(1) + "0"
 
                 # Add the extracted data to results
@@ -89,12 +132,15 @@ def extract_commodity_data(text):
 
     return results
 
-
 # Handle incoming messages
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message.text
     extracted_data = extract_commodity_data(message)
-        
+
+    # Save the extracted data to the database
+    if extracted_data:
+        save_to_db(extracted_data)
+
     # Format the extracted data for response
     formatted_data = "\n\n".join(
         f"🗓 **تاریخ:** {item['date'] or 'نامشخص'}\n"
@@ -106,14 +152,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💵 **قیمت:** {item['price'] or 'نامشخص'}"
         for item in extracted_data
     )
-        
+
     # Add a stylish header
     header = "🌟 **اطلاعات استخراج شده** 🌟\n" + ("—" * 25)
     response = f"{header}\n\n{formatted_data}" if formatted_data else "❌ هیچ اطلاعات مرتبطی یافت نشد."
-        
+
     # Reply with the formatted data
     await update.message.reply_text(response, parse_mode="Markdown")
-
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("سلام! پیام خود را ارسال کنید تا اطلاعات مرتبط استخراج شود.")
@@ -122,10 +167,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     bot_token = "7876541643:AAETxa5cAIkv6fK94hEYVfWxedE1iaH_dXg"
     application = Application.builder().token(bot_token).build()
-    
+
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
+
     application.run_polling()
 
 if __name__ == "__main__":
