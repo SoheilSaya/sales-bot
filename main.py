@@ -48,36 +48,33 @@ def extract_commodity_data(text):
                     if type_ in line:
                         type_found = type_
                         break
-                
+
                 # Find the grade
                 for grade in reference_dict["grades"]:
                     if grade in line:
                         grade_found = grade
                         break
-                
-                # Find the size (explicit size or standalone number)
-                size_match = re.search(r"(?:سایز\s+)?([\d.]+(?:\s*الی\s*[\d.]+)?)", line)
+
+                # Find the size (explicit size or range)
+                size_match = re.search(r"سایز\s+([\d.]+(?:\s*الی\s*[\d.]+)?)", line)
                 if size_match:
                     size_found = size_match.group(1).strip()
                 else:
-                    # Check for standalone sizes from the dictionary
+                    # Fallback to check for standalone sizes in the dictionary
                     for size in reference_dict["sizes"]:
-                        if size in line:
+                        if f"سایز {size}" in line or size in line:
                             size_found = size
                             break
-                
+
                 # Find the price (either in the same line or the next line)
                 price_match = re.search(r"\b(\d{5,})0\b", line)
                 if price_match:
                     price_found = price_match.group(1) + "0"
                 elif i + 1 < len(lines):  # Check the next line for the price
                     next_line_price_match = re.search(r"\b(\d{5,})0\b", lines[i + 1])
-                    for temp_commodity_type in reference_dict["commodity_types"]:
-                        if temp_commodity_type in line: 
-                            commodity_type_found=True
-                    if next_line_price_match and not commodity_type_found:
+                    if next_line_price_match:
                         price_found = next_line_price_match.group(1) + "0"
-                
+
                 # Add the extracted data to results
                 results.append({
                     "date": date_found,
@@ -89,8 +86,9 @@ def extract_commodity_data(text):
                     "price": price_found
                 })
                 break  # Process only the first matching commodity in the line
-    
+
     return results
+
 
 # Handle incoming messages
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
